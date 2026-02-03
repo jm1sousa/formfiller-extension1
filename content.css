@@ -1,0 +1,10 @@
+/* FormFiller Auto - Visual feedback */
+.formfiller-highlight {
+  outline: 2px solid #818cf8 !important;
+  outline-offset: 2px;
+  transition: outline 0.2s ease;
+}
+
+.formfiller-filled {
+  background-color: rgba(129, 140, 248, 0.1) !important;
+}
