@@ -55,6 +55,16 @@ header {
   background: #ef4444;
 }
 
+.status-indicator.complete {
+  background: #22c55e;
+  animation: none;
+}
+
+.status-indicator.waiting {
+  background: #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -128,10 +138,15 @@ header {
 }
 
 .controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.controls .btn {
+  flex: 1;
+  min-width: 80px;
 }
 
 .btn {
@@ -160,6 +175,15 @@ header {
 
 .btn-primary:hover:not(:disabled) {
   background: #6366f1;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #4b5563;
 }
 
 .btn-danger {
