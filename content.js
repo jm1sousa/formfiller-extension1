@@ -712,6 +712,10 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'start') {
       console.log('FormFiller: Received start command from popup');
+      
+      // Create widget only when user starts (lazy initialization)
+      createWidget();
+      
       isRunning = true;
       settings = message.settings || {};
       
@@ -739,10 +743,10 @@
     }
   });
 
-  // Initialize widget and load saved state
+  // Initialize - only load state, widget will be created when user starts
   loadState().then(() => {
     console.log('FormFiller Auto loaded', savedState ? '(has saved state)' : '');
-    createWidget();
+    // Widget is NOT created automatically - only when user clicks Start in popup
   });
 })();
 
