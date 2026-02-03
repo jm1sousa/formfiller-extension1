@@ -383,7 +383,13 @@
 
   // Fill a single field with animation
   async function fillField(field) {
-    const value = getValueForField(field);
+    const value = getValueForField(field) || '';
+    
+    // Skip if no value to fill
+    if (!value || typeof value !== 'string') {
+      console.warn('FormFiller: Skipping field with invalid value', field);
+      return;
+    }
     
     field.focus();
     field.dispatchEvent(new Event('focus', { bubbles: true }));
