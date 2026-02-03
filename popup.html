@@ -1,83 +1,177 @@
-<!DOCTYPE html>
-<html lang="pt">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FormFiller Auto</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <div class="container">
-    <header>
-      <div class="logo">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
-        </svg>
-        <span>FormFiller Auto</span>
-      </div>
-    </header>
+// DOM Elements
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const statusIndicator = document.getElementById('statusIndicator');
+const statusText = document.getElementById('statusText');
+const filledCount = document.getElementById('filledCount');
+const pagesCompleted = document.getElementById('pagesCompleted');
+const delayInput = document.getElementById('delay');
+const submitDelayInput = document.getElementById('submitDelay');
 
-    <main>
-      <div class="status-card" id="statusCard">
-        <div class="status-indicator" id="statusIndicator"></div>
-        <span id="statusText">Parado</span>
-      </div>
+// Load saved settings
+chrome.storage.local.get(['settings', 'stats', 'isRunning', 'formFillerState'], (data) => {
+  if (data.settings) {
+    delayInput.value = data.settings.delay || 300;
+    submitDelayInput.value = data.settings.submitDelay || 500;
+  }
+  if (data.stats) {
+    filledCount.textContent = data.stats.filledCount || 0;
+    pagesCompleted.textContent = data.stats.pagesCompleted || 0;
+  }
+  if (data.isRunning) {
+    updateUIRunning(true);
+  }
+  
+  // Check if there's saved state to resume
+  checkResumeState();
+});
 
-      <div class="settings">
-        <div class="setting-group">
-          <label for="delay">Delay entre campos (ms)</label>
-          <input type="number" id="delay" value="300" min="100" max="5000" step="100">
-        </div>
+// Check if we can resume
+async function checkResumeState() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+  
+  try {
+    chrome.tabs.sendMessage(tab.id, { action: 'getState' }, (response) => {
+      if (chrome.runtime.lastError) {
+        // Content script not loaded
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        return;
+      }
+      
+      if (response && response.hasState) {
+        if (resumeBtn) {
+          resumeBtn.style.display = 'block';
+          resumeBtn.title = `Retomar (${response.state.filledCount} páginas preenchidas)`;
+        }
+      } else {
+        if (resumeBtn) resumeBtn.style.display = 'none';
+      }
+    });
+  } catch (e) {
+    if (resumeBtn) resumeBtn.style.display = 'none';
+  }
+}
 
-        <div class="setting-group">
-          <label for="submitDelay">Delay antes de continuar (ms)</label>
-          <input type="number" id="submitDelay" value="500" min="100" max="5000" step="100">
-        </div>
-      </div>
+// Save settings on change
+function saveSettings() {
+  const settings = {
+    delay: parseInt(delayInput.value) || 300,
+    submitDelay: parseInt(submitDelayInput.value) || 500
+  };
+  chrome.storage.local.set({ settings });
+}
 
-      <div class="stats">
-        <div class="stat">
-          <span class="stat-value" id="filledCount">0</span>
-          <span class="stat-label">Páginas preenchidas</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value" id="pagesCompleted">-</span>
-          <span class="stat-label">Estado</span>
-        </div>
-      </div>
+delayInput.addEventListener('change', saveSettings);
+submitDelayInput.addEventListener('change', saveSettings);
 
-      <div class="controls">
-        <button id="startBtn" class="btn btn-primary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          Iniciar
-        </button>
-        <button id="resumeBtn" class="btn btn-secondary" style="display: none;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 3v5h5"/>
-          </svg>
-          Retomar
-        </button>
-        <button id="stopBtn" class="btn btn-danger" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="6" width="12" height="12"/>
-          </svg>
-          Parar
-        </button>
-      </div>
+// Update UI based on running state
+function updateUIRunning(isRunning, status = 'running') {
+  if (isRunning) {
+    statusIndicator.classList.add('running');
+    statusIndicator.classList.remove('error', 'complete', 'waiting');
+    
+    if (status === 'complete') {
+      statusIndicator.classList.add('complete');
+      statusText.textContent = 'Formulário completo!';
+    } else if (status === 'waiting') {
+      statusIndicator.classList.add('waiting');
+      statusText.textContent = 'A aguardar...';
+    } else {
+      statusText.textContent = 'A preencher...';
+    }
+    
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    if (resumeBtn) resumeBtn.disabled = true;
+  } else {
+    statusIndicator.classList.remove('running', 'complete', 'waiting');
+    statusText.textContent = 'Parado';
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    if (resumeBtn) resumeBtn.disabled = false;
+  }
+}
 
-      <div class="info">
-        <p>💡 Abre a página do formulário e clica em Iniciar. A extensão preenche e avança automaticamente.</p>
-      </div>
-    </main>
-  </div>
-  <script src="popup.js"></script>
-</body>
-</html>
+// Start button click (fresh start)
+startBtn.addEventListener('click', async () => {
+  saveSettings();
+  await startFilling(false);
+});
+
+// Resume button click
+if (resumeBtn) {
+  resumeBtn.addEventListener('click', async () => {
+    saveSettings();
+    await startFilling(true);
+  });
+}
+
+// Start or resume filling
+async function startFilling(resume = false) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  if (!tab) {
+    statusText.textContent = 'Erro: Nenhuma aba activa';
+    statusIndicator.classList.add('error');
+    return;
+  }
+
+  const settings = {
+    delay: parseInt(delayInput.value) || 300,
+    submitDelay: parseInt(submitDelayInput.value) || 500
+  };
+
+  chrome.storage.local.set({ 
+    isRunning: true, 
+    stats: resume ? undefined : { filledCount: 0, pagesCompleted: 0 } 
+  });
+  updateUIRunning(true);
+
+  chrome.tabs.sendMessage(tab.id, { action: 'start', settings, resume });
+}
+
+// Stop button click
+stopBtn.addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  chrome.storage.local.set({ isRunning: false });
+  updateUIRunning(false);
+  
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { action: 'stop' });
+  }
+  
+  // Show resume button after stopping
+  setTimeout(checkResumeState, 500);
+});
+
+// Listen for updates from content script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'statsUpdate') {
+    filledCount.textContent = message.filledCount;
+    
+    if (message.status === 'complete') {
+      updateUIRunning(true, 'complete');
+    } else if (message.status === 'waiting') {
+      updateUIRunning(true, 'waiting');
+    }
+    
+    chrome.storage.local.set({ 
+      stats: { 
+        filledCount: message.filledCount
+      } 
+    });
+  }
+  if (message.type === 'stopped') {
+    updateUIRunning(false);
+    chrome.storage.local.set({ isRunning: false });
+    setTimeout(checkResumeState, 500);
+  }
+  if (message.type === 'error') {
+    statusIndicator.classList.add('error');
+    statusText.textContent = message.message;
+  }
+});
   
